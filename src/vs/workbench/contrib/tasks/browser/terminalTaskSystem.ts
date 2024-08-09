@@ -521,17 +521,12 @@ export class TerminalTaskSystem extends Disposable implements ITaskSystem {
 							if (!taskResult) {
 								const activeTask = this._activeTasks[dependencyTask.getMapKey()] ?? this._getInstances(dependencyTask).pop();
 								taskResult = activeTask && this._getDependencyPromise(activeTask);
-								if (activeTask) {
-									// If the task is already running, terminate it. We will rerun it below to
-									// prevent a race condition #203776
-									this._log('terminating already active task ' + activeTask.task._label);
-									this.terminate(activeTask.task);
-									this._removeFromActiveTasks(activeTask.task);
-								}
 							}
 						}
-						this._fireTaskEvent(TaskEvent.general(TaskEventKind.DependsOnStarted, task));
-						taskResult = this._executeDependencyTask(dependencyTask, resolver, trigger, nextLiveDependencies, encounteredTasks, alreadyResolved);
+						if (!taskResult) {
+							this._fireTaskEvent(TaskEvent.general(TaskEventKind.DependsOnStarted, task));
+							taskResult = this._executeDependencyTask(dependencyTask, resolver, trigger, nextLiveDependencies, encounteredTasks, alreadyResolved);
+						}
 						encounteredTasks.set(commonKey, taskResult);
 						promises.push(taskResult);
 						if (task.configurationProperties.dependsOrder === DependsOrder.sequence) {
@@ -567,9 +562,7 @@ export class TerminalTaskSystem extends Disposable implements ITaskSystem {
 				return { exitCode: 0 };
 			});
 		}).finally(() => {
-			if (this._activeTasks[mapKey] === activeTask) {
-				delete this._activeTasks[mapKey];
-			}
+			delete this._activeTasks[mapKey];
 		});
 		const lastInstance = this._getInstances(task).pop();
 		const count = lastInstance?.count ?? { count: 0 };
@@ -1056,11 +1049,7 @@ export class TerminalTaskSystem extends Disposable implements ITaskSystem {
 				this._terminalService.focusInstance(terminal);
 			}
 		}
-		const activeTask = this._activeTasks[task.getMapKey()];
-		// it's possible this has been removed already
-		if (activeTask) {
-			activeTask.terminal = terminal;
-		}
+		this._activeTasks[task.getMapKey()].terminal = terminal;
 		this._fireTaskEvent(TaskEvent.changed());
 		return promise;
 	}
