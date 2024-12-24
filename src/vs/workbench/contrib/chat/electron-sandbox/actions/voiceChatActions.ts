@@ -369,11 +369,11 @@ class VoiceChatSessions {
 		if (!response) {
 			return;
 		}
-		const autoSynthesize = this.configurationService.getValue<'on' | 'off' | 'auto'>(AccessibilityVoiceSettingId.AutoSynthesize);
-		if (autoSynthesize === 'on' || autoSynthesize === 'auto' && !this.accessibilityService.isScreenReaderOptimized()) {
+		const autoSynthesize = this.configurationService.getValue<'on' | 'off'>(AccessibilityVoiceSettingId.AutoSynthesize);
+		if (autoSynthesize === 'on' || (autoSynthesize !== 'off' && !this.accessibilityService.isScreenReaderOptimized())) {
 			let context: IVoiceChatSessionController | 'focused';
 			if (controller.context === 'inline') {
-				// TODO@bpasero this is ugly, but the lightweight inline chat turns into
+				// This is ugly, but the lightweight inline chat turns into
 				// a different widget as soon as a response comes in, so we fallback to
 				// picking up from the focused chat widget
 				context = 'focused';
@@ -695,7 +695,7 @@ class ChatSynthesizerSessionController {
 		const contextKeyService = accessor.get(IContextKeyService);
 		let chatWidget = chatWidgetService.getWidgetBySessionId(response.session.sessionId);
 		if (chatWidget?.location === ChatAgentLocation.Editor) {
-			// TODO@bpasero workaround for https://github.com/microsoft/vscode/issues/212785
+			// workaround for https://github.com/microsoft/vscode/issues/212785
 			chatWidget = chatWidgetService.lastFocusedWidget;
 		}
 
@@ -707,7 +707,7 @@ class ChatSynthesizerSessionController {
 	}
 }
 
-interface IChatSyntheSizerContext {
+interface IChatSynthesizerContext {
 	readonly ignoreCodeBlocks: boolean;
 	insideCodeBlock: boolean;
 }
@@ -774,7 +774,7 @@ class ChatSynthesizerSessions {
 	}
 
 	private async *nextChatResponseChunk(response: IChatResponseModel, token: CancellationToken): AsyncIterable<string> {
-		const context: IChatSyntheSizerContext = {
+		const context: IChatSynthesizerContext = {
 			ignoreCodeBlocks: this.configurationService.getValue<boolean>(AccessibilityVoiceSettingId.IgnoreCodeBlocks),
 			insideCodeBlock: false
 		};
@@ -801,7 +801,7 @@ class ChatSynthesizerSessions {
 		} while (!token.isCancellationRequested && !complete);
 	}
 
-	private parseNextChatResponseChunk(response: IChatResponseModel, offset: number, context: IChatSyntheSizerContext): { readonly chunk: string | undefined; readonly offset: number } {
+	private parseNextChatResponseChunk(response: IChatResponseModel, offset: number, context: IChatSynthesizerContext): { readonly chunk: string | undefined; readonly offset: number } {
 		let chunk: string | undefined = undefined;
 
 		const text = response.response.toString();
@@ -825,7 +825,7 @@ class ChatSynthesizerSessions {
 		};
 	}
 
-	private filterCodeBlocks(chunk: string, context: IChatSyntheSizerContext): string {
+	private filterCodeBlocks(chunk: string, context: IChatSynthesizerContext): string {
 		return chunk.split('\n')
 			.filter(line => {
 				if (line.trimStart().startsWith('```')) {
