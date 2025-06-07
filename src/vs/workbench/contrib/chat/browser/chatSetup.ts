@@ -24,7 +24,7 @@ import { URI } from '../../../../base/common/uri.js';
 import { ServicesAccessor } from '../../../../editor/browser/editorExtensions.js';
 import { MarkdownRenderer } from '../../../../editor/browser/widget/markdownRenderer/browser/markdownRenderer.js';
 import { localize, localize2 } from '../../../../nls.js';
-import { Action2, MenuId, MenuRegistry, registerAction2 } from '../../../../platform/actions/common/actions.js';
+import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { ConfigurationTarget, IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { Extensions as ConfigurationExtensions, IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
@@ -593,7 +593,7 @@ class ChatSetup {
 		let instance = ChatSetup.instance;
 		if (!instance) {
 			instance = ChatSetup.instance = instantiationService.invokeFunction(accessor => {
-				return new ChatSetup(context, controller, instantiationService, accessor.get(ITelemetryService), accessor.get(IWorkbenchLayoutService), accessor.get(IKeybindingService), accessor.get(IChatEntitlementService), accessor.get(ILogService), accessor.get(IConfigurationService), accessor.get(IViewsService), accessor.get(IProductService), accessor.get(IOpenerService), accessor.get(IContextMenuService));
+				return new ChatSetup(context, controller, instantiationService, accessor.get(ITelemetryService), accessor.get(IWorkbenchLayoutService), accessor.get(IKeybindingService), accessor.get(IChatEntitlementService) as ChatEntitlementService, accessor.get(ILogService), accessor.get(IConfigurationService), accessor.get(IViewsService), accessor.get(IProductService), accessor.get(IOpenerService), accessor.get(IContextMenuService));
 			});
 		}
 
@@ -611,13 +611,13 @@ class ChatSetup {
 		@ITelemetryService private readonly telemetryService: ITelemetryService,
 		@ILayoutService private readonly layoutService: IWorkbenchLayoutService,
 		@IKeybindingService private readonly keybindingService: IKeybindingService,
-		@IChatEntitlementService private readonly chatEntitlementService: IChatEntitlementService,
+		@IChatEntitlementService private readonly chatEntitlementService: ChatEntitlementService,
 		@ILogService private readonly logService: ILogService,
 		@IConfigurationService private readonly configurationService: IConfigurationService,
 		@IViewsService private readonly viewsService: IViewsService,
 		@IProductService private readonly productService: IProductService,
 		@IOpenerService private readonly openerService: IOpenerService,
-		@IContextMenuService private readonly contextMenuService: IContextMenuService
+		@IContextMenuService private readonly contextMenuService: IContextMenuService,
 	) { }
 
 	skipDialog(): void {
@@ -639,6 +639,8 @@ class ChatSetup {
 	}
 
 	private async doRun(options?: { disableChatViewReveal?: boolean }): Promise<IChatSetupResult> {
+		this.context.update({ later: false });
+
 		const dialogSkipped = this.skipDialogOnce;
 		this.skipDialogOnce = false;
 
@@ -675,6 +677,7 @@ class ChatSetup {
 					this.openerService.open(URI.parse(defaultChat.signUpUrl));
 					return this.doRun(options); // open dialog again
 				case ChatSetupStrategy.Canceled:
+					this.context.update({ later: true });
 					this.telemetryService.publicLog2<InstallChatEvent, InstallChatClassification>('commandCenter.chatInstall', { installResult: 'failedMaybeLater', installDuration: 0, signUpErrorCode: undefined });
 					break;
 			}
@@ -985,7 +988,6 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 
 		this.registerSetupAgents(context, controller);
 		this.registerActions(context, requests, controller);
-		this.registerMenus();
 		this.registerUrlLinkHandler();
 	}
 
@@ -1289,38 +1291,6 @@ export class ChatSetupContribution extends Disposable implements IWorkbenchContr
 		registerAction2(ChatSetupHideAction);
 		registerAction2(UpgradePlanAction);
 		registerAction2(EnableOveragesAction);
-	}
-
-	private registerMenus(): void {
-		const menuContext = ContextKeyExpr.and(
-			// TODO@bpasero this needs to be revisited when the Copilot
-			// extension contributes this OOTB where this menu is also
-			// defined.
-			ChatContextKeys.Setup.installed.negate(),
-			ChatContextKeys.Setup.hidden.negate(),
-			ChatContextKeys.Setup.disabled.negate()
-		);
-
-		MenuRegistry.appendMenuItem(MenuId.ExplorerContext, {
-			submenu: MenuId.ChatExplorerMenu,
-			group: '5_copilot',
-			title: localize('title4', "Copilot"),
-			when: menuContext
-		});
-
-		MenuRegistry.appendMenuItem(MenuId.EditorContext, {
-			submenu: MenuId.ChatTextEditorMenu,
-			group: '1_copilot',
-			title: localize('title4', "Copilot"),
-			when: menuContext
-		});
-
-		MenuRegistry.appendMenuItem(MenuId.TerminalInstanceContext, {
-			submenu: MenuId.ChatTerminalMenu,
-			group: '2_copilot',
-			title: localize('title4', "Copilot"),
-			when: menuContext
-		});
 	}
 
 	private registerUrlLinkHandler(): void {
